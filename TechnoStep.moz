@@ -22,6 +22,12 @@
   if Unassigned controlSteps
     controlSteps = 8
   endif
+  if Unassigned actulControlSteps
+    actualControlSteps = 8
+  endif
+  if Unassigned gateSteps
+    gateSteps = 8
+  endif
   // Duplicated as there is no Log2 function
   if Unassigned pulse
     pulse = 4
@@ -69,6 +75,11 @@
     FillArray controlValues, 100, 8
   endif
   
+  if Unassigned gateValues
+    gateValues = []
+    FillArray gateValues, 95, 8
+  endif
+  
   lastHostBeat = 0
   lastHostBar = 0
   
@@ -85,12 +96,6 @@
   // UI internal state
   doubleShiftValid = False
   activeScreen = screen_main
-  
-  SetKnobValue knob_direction, 127
-  SetKnobValue knob_pulse, 100 
-  SetKnobValue knob_steps, 127
-  SetKnobValue knob_controlSteps, 127  
-  SetKnobValue knob_offset, 0  
 
   SetRootNote rootNote
   PresetScale scale
@@ -133,7 +138,7 @@
     elseif LastKnob = knob_steps
       steps = Round(TranslateScale value, 0, 127, 1, 8)
     elseif LastKnob = knob_controlSteps
-      controlSteps = Round(TranslateScale value, 0, 127, 1, 8)
+      controlSteps = Round(TranslateScale value, 0, 127, 0, 8)
     endif
     
     Call @UpdateUI
@@ -202,13 +207,21 @@
   
     LabelKnob knob_pulse, {Pulse: 1/}, pulseDenom
     LabelKnob knob_steps, {Steps: }, steps
-    LabelKnob knob_controlSteps, {C.Steps: }, controlSteps
+    
+    if controlSteps = 0
+      LabelKnob knob_controlSteps, {Ctrl: 🔗}
+    else
+      LabelKnob knob_controlSteps, {Ctrl: }, controlSteps
+    endif
+    
     LabelKnob knob_offset, {Offset: }, offset
 
-    Call @UpdateStepsUI
+    Call @UpdateMainStepsUI
   elseif activeScreen = screen_shift
     ShowLayout 1
     LabelKnobs {TechnoStep: Aux}
+    
+    Call @UpdateAuxStepsUI
   elseif activeScreen = screen_config
     ShowLayout 1
     LabelKnobs {TechnoStep: Config}
@@ -229,30 +242,54 @@
   endif
 @End
 
-@UpdateStepsUI
-  if activeScreen = screen_main
-    for i = 0 to 7
-      if i < steps
-        if i = currentStep
-          LabelKnob i, {*Step }, i + 1, {*}
-        else
-          LabelKnob i, {Step }, i + 1
-        endif
-      else 
-        LabelKnob i, { } 
-      endif
-    
-      if i < controlSteps
-        if i = currentControlStep
-          LabelKnob i + 11, {*Ctrl }, i + 1, {*}
-        else
-          LabelKnob i + 11, {Ctrl }, i + 1
-        endif
+@UpdateMainStepsUI
+  Call @UpdateLinkedSteps
+  
+  for i = 0 to 7
+    if i < steps
+      if i = currentStep
+        LabelKnob i, {*Step }, i + 1, {*}
       else
-        LabelKnob i + 11, { }
+        LabelKnob i, {Step }, i + 1
       endif
-    endfor 
-  endif
+    else 
+      LabelKnob i, { } 
+    endif
+  
+    if i < actualControlSteps
+      if i = currentControlStep
+        LabelKnob i + 11, {*Ctrl }, i + 1, {*}
+      else
+        LabelKnob i + 11, {Ctrl }, i + 1
+      endif
+    else
+      LabelKnob i + 11, { }
+    endif
+  endfor 
+@End
+
+@UpdateAuxStepsUI
+  for i = 0 to 7
+    if i < steps
+      if i = currentStep
+        LabelKnob i, {*Step }, i + 1, {*}
+      else
+        LabelKnob i, {Step }, i + 1
+      endif
+    else 
+      LabelKnob i, { } 
+    endif
+  
+    if i < controlSteps
+      if i = currentControlStep
+        LabelKnob i + 11, {*Ctrl }, i + 1, {*}
+      else
+        LabelKnob i + 11, {Ctrl }, i + 1
+      endif
+    else
+      LabelKnob i + 11, { }
+    endif
+  endfor 
 @End
 
 @UpdateKnobs
@@ -266,13 +303,21 @@
     SetKnobValue knob_pulse, TranslateScale pulse, 0, 5, 0, 127 
     SetKnobValue knob_offset, TranslateScale offset, 0, 7, 0, 127
     SetKnobValue knob_steps, TranslateScale steps, 1, 8, 0, 127
-    SetKnobValue knob_controlSteps, TranslateScale controlSteps, 1, 8, 0, 127
+    SetKnobValue knob_controlSteps, TranslateScale controlSteps, 0, 8, 0, 127
   elseif activeScreen = screen_config
     SetKnobValue knob_scale, TranslateScale scale, 0, 24, 0, 127
     SetKnobValue knob_root, TranslateScale rootNote, 0, 12, 0, 127
     SetKnobValue knob_relativePitch, TranslateScale relativePitch, 0, 1, 0, 127
     SetKnobValue knob_minNote, minNote
     SetKnobValue knob_maxNote, maxNote
+  endif
+@End
+
+@UpdateLinkedSteps
+  if controlSteps = 0
+    actualControlSteps = steps
+  else
+    actualControlSteps = controlSteps
   endif
 @End
 
@@ -289,7 +334,7 @@
 @OnMetroPulse
   metroPulse = metroPulse + 1
   currentStep = (metroPulse + offset) % steps
-  currentControlStep = ((metroPulse + offset) % controlSteps)
+  currentControlStep = ((metroPulse + offset) % actualControlSteps)
 
   note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
 
@@ -306,7 +351,7 @@
     SendMIDINoteOff 0, note, control, (QuarterNote / (pulseDenom / 4) - 1)
   endif  
 
-  Call @UpdateStepsUI
+  Call @UpdateMainStepsUI
 @End
 
 @OnNewBar
