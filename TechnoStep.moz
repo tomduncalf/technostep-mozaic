@@ -95,15 +95,6 @@
   SetRootNote rootNote
   PresetScale scale
   
-  // Only do this if not restoring a saved state
-  if Unassigned loaded
-    for i = 0 to 7
-      SetKnobValue i + 11, 100
-    endfor
-  
-    loaded = True 
-  endif
-  
   Call @UpdateUI
   Call @UpdateKnobs
   Call @UpdateMetronome
@@ -111,15 +102,10 @@
 
 @OnHostStart
   // Assume we have rewound to the start, ideally this would be more robust
+  // but there doesn't seem to be a more granular way to detect this
   if HostBar <> lastHostBar OR HostBeat <> lastHostBeat
     metroPulse = -1
   endif
-  //Log {Bar }, HostBar, { }, lastHostBar, { Beat }, HostBeat, { }, lastHostBeat
-@End 
-
-@OnHostStop
-  //currentStep = -1
-  //Call @UpdateUI
 @End 
 
 @OnKnobChange  
@@ -317,7 +303,7 @@
   
   if note > 0
     SendMIDINoteOn 0, note, control, 0
-    SendMIDINoteOff 0, note, control, 50
+    SendMIDINoteOff 0, note, control, (QuarterNote / (pulseDenom / 4) - 1)
   endif  
 
   Call @UpdateStepsUI
