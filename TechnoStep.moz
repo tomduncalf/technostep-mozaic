@@ -96,7 +96,7 @@
   
   if Unassigned lengthValues
     lengthValues = []
-    FillArray lengthValues, 63, 8
+    FillArray lengthValues, 0, 8
    endif
   
   lastHostBeat = 0
@@ -111,6 +111,7 @@
   pad_randomiseSteps = 0
   pad_randomiseControl = 1
   pad_randomiseGate = 2
+  pad_randomiseLength = 3
   pad_config = 8
   
   // UI internal state
@@ -204,7 +205,9 @@
     elseif LastPad = pad_randomiseControl
       Call @RandomiseControl
     elseif LastPad = pad_randomiseGate
-      Call @RandomiseGate  
+      Call @RandomiseGate
+    elseif LastPad = pad_randomiseLength
+      Call @RandomiseLength
     elseif LastPad = pad_config
       nextScreen = screen_config
       Call @SwitchScreen
@@ -227,6 +230,12 @@
 @RandomiseGate
   for i = 0 to 7
     gateValues[i] = Random 0, 127
+  endfor
+@End
+
+@RandomiseLength
+  for i = 0 to 7
+    lengthValues[i] = Random 0, 127
   endfor
 @End
 
@@ -291,6 +300,7 @@
     LabelPad pad_randomiseSteps, {Randomise Steps}
     LabelPad pad_randomiseControl, {Randomise Control}    
     LabelPad pad_randomiseGate, {Randomise Gate}    
+    LabelPad pad_randomiseLength, {Randomise Length}        
     LabelPad pad_config, {Config}
   endif
 @End
@@ -415,29 +425,42 @@
 @End
 
 @OnMetroPulse
-  metroPulse = metroPulse + 1
+  if Unassigned remainingLength
+    remainingLength = 0
+  endif 
   
-  currentStep = (metroPulse + offset) % steps
-  currentControlStep = ((metroPulse + offset) % actualControlSteps)
-  currentGateStep = ((metroPulse + offset) % actualGateSteps)
-  currentLengthStep = ((metroPulse + offset) % actualLengthSteps)
+  if remainingLength > 0
+    remainingLength = remainingLength - 1
+  else
+    // TODO is this the best way vs just keeping e.g. currentStep++? Why?
+    metroPulse = metroPulse + 1
     
-  note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
-
-  if relativePitch
-    note = rootNote + note
+    currentStep = (metroPulse + offset) % steps
+    currentControlStep = ((metroPulse + offset) % actualControlSteps)
+    currentGateStep = ((metroPulse + offset) % actualGateSteps)
+    currentLengthStep = ((metroPulse + offset) % actualLengthSteps)
+      
+    note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
+  
+    if relativePitch
+      note = rootNote + note
+    endif
+    
+    note = ScaleQuantize (note)
+    
+    control = controlValues[currentControlStep]
+    // 64 instead of 63 so the default value is slightly < 1 so you don't get legato
+    gate = gateValues[currentGateStep] / 64
+    length = Round(TranslateScale lengthValues[currentLengthStep], 0, 127, 1, 8)
+    remainingLength = length - 1
+    
+    noteDuration = (QuarterNote / (pulseDenom / 4)) * gate * length
+    
+    if note > 0
+      SendMIDINoteOn 0, note, control, 0
+      SendMIDINoteOff 0, note, control, noteDuration
+    endif  
   endif
-  
-  note = ScaleQuantize (note)
-  
-  control = controlValues[currentControlStep]
-  // 64 instead of 63 so the default value is slightly < 1 so you don't get legato
-  gate = gateValues[currentGateStep] / 64
-  
-  if note > 0
-    SendMIDINoteOn 0, note, control, 0
-    SendMIDINoteOff 0, note, control, (QuarterNote * gate)
-  endif  
 
   Call @UpdateStepsUI
 @End
