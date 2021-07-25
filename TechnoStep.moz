@@ -11,6 +11,7 @@
   // Config knob constants
   knob_scale = 0
   knob_root = 1
+  knob_relativePitch = 2
   
   // Visible UI state
   steps = 8
@@ -18,6 +19,10 @@
   pulseDenom = 16
   direction = 1
   offset = 0
+  
+  // Config state
+  relativePitch = False
+  rootNote = 0
   
   // Sequencer internal state
   metroPulse = -1
@@ -101,7 +106,11 @@
       PresetScale Round(TranslateScale (GetKnobValue knob_scale), 0, 127, 0, 24)
       Call @UpdateUI
     elseif LastKnob = knob_root
-      SetRootNote Round(TranslateScale (GetKnobValue knob_root), 0, 127, 0, 12)
+      rootNote = Round(TranslateScale (GetKnobValue knob_root), 0, 127, 0, 12)
+      SetRootNote rootNote
+      Call @UpdateUI
+    elseif LastKnob = knob_relativePitch
+      relativePitch = Round(TranslateScale (GetKnobValue knob_relativePitch), 0, 127, 0, 1)
       Call @UpdateUI
     endif
   endif
@@ -128,6 +137,7 @@
   elseif activeScreen = screen_config
     LabelKnob 0, ScaleName
     LabelKnob 1, {Root: }, RootNoteName 
+    LabelKnob 2, {Rel: }, relativePitch 
   endif
 @End
 
@@ -185,7 +195,13 @@
   currentStep = (metroPulse + offset) % steps
   currentControlStep = ((metroPulse + offset) % controlSteps)
 
-  note = ScaleQuantize (knobValues[currentStep])
+  if relativePitch
+    note = rootNote + knobValues[currentStep]
+  else
+    note = knobValues[currentStep]
+  endif
+  
+  note = ScaleQuantize (note)
   control = knobValues[currentControlStep + 11]
   
   if note > 0
