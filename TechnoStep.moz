@@ -8,6 +8,7 @@
   knob_steps = 20
   knob_controlSteps = 21 
   knob_gateSteps = 20
+  knob_lengthSteps = 21 
   
   // Config knob constants
   knob_scale = 0
@@ -31,6 +32,12 @@
   endif
   if Unassigned actualGateSteps
     actualGateSteps = 8
+  endif
+  if Unassigned lengthSteps
+    lengthSteps = 8
+  endif
+  if Unassigned actualLengthSteps
+    actualLengthSteps = 8
   endif
   
   // Duplicated as there is no Log2 function
@@ -69,6 +76,7 @@
   currentStep = -1
   currentControlStep = -1
   currentGateStep = -1  
+  currentLengthStep = -1    
   currentStepDelta = 1
   
   if Unassigned stepValues
@@ -85,6 +93,11 @@
     gateValues = []
     FillArray gateValues, 63, 8
   endif
+  
+  if Unassigned lengthValues
+    lengthValues = []
+    FillArray lengthValues, 63, 8
+   endif
   
   lastHostBeat = 0
   lastHostBar = 0
@@ -152,6 +165,10 @@
   elseif activeScreen = screen_shift
     if LastKnob < 8
       gateValues[LastKnob] = value
+    elseif LastKnob >= 11 AND LastKnob < 19
+      lengthValues[LastKnob - 11] = value
+    elseif LastKnob = knob_lengthSteps
+      lengthSteps = Round(TranslateScale value, 0, 127, 0, 8)  
     elseif LastKnob = knob_gateSteps
       gateSteps = Round(TranslateScale value, 0, 127, 0, 8)
     endif
@@ -244,6 +261,12 @@
     ShowLayout 1
     LabelKnobs {TechnoStep: Aux}
     
+    if lengthSteps = 0
+      LabelKnob knob_lengthSteps, {Length: 🔗}
+    else
+      LabelKnob knob_lengthSteps, {Length: }, lengthSteps
+      endif
+      
     if gateSteps = 0
       LabelKnob knob_gateSteps, {Gate: 🔗}
     else
@@ -320,11 +343,11 @@
       LabelKnob i, { } 
     endif
   
-    if i < controlSteps
-      if i = currentControlStep
-        LabelKnob i + 11, {*x }, i + 1, {*}
+    if i < actualLengthSteps
+      if i = currentLengthStep
+        LabelKnob i + 11, {*Length }, i + 1, {*}
       else
-        LabelKnob i + 11, {x }, i + 1
+        LabelKnob i + 11, {Length }, i + 1
       endif
     else
       LabelKnob i + 11, { }
@@ -347,9 +370,11 @@
   elseif activeScreen = screen_shift  
     for i = 0 to 7
       SetKnobValue i, gateValues[i]
+      SetKnobValue (i + 11), lengthValues[i]      
     endfor
     
     SetKnobValue knob_gateSteps, TranslateScale gateSteps, 0, 8, 0, 127
+    SetKnobValue knob_lengthSteps, TranslateScale lengthSteps, 0, 8, 0, 127
   elseif activeScreen = screen_config
     SetKnobValue knob_scale, TranslateScale scale, 0, 24, 0, 127
     SetKnobValue knob_root, TranslateScale rootNote, 0, 12, 0, 127
@@ -371,6 +396,12 @@
   else
     actualGateSteps = gateSteps
   endif
+  
+  if lengthSteps = 0
+    actualLengthSteps = steps
+  else
+    actualLengthSteps = lengthSteps
+  endif
 @End
 
 @SwitchScreen
@@ -385,10 +416,12 @@
 
 @OnMetroPulse
   metroPulse = metroPulse + 1
+  
   currentStep = (metroPulse + offset) % steps
   currentControlStep = ((metroPulse + offset) % actualControlSteps)
   currentGateStep = ((metroPulse + offset) % actualGateSteps)
-  
+  currentLengthStep = ((metroPulse + offset) % actualLengthSteps)
+    
   note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
 
   if relativePitch
@@ -398,7 +431,7 @@
   note = ScaleQuantize (note)
   
   control = controlValues[currentControlStep]
-  // 64 instead of 63 so the default value is slightly < 1
+  // 64 instead of 63 so the default value is slightly < 1 so you don't get legato
   gate = gateValues[currentGateStep] / 64
   
   if note > 0
