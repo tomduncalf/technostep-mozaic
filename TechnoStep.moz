@@ -16,17 +16,35 @@
   knob_maxNote = 4
   
   // Visible UI state
-  steps = 8
-  controlSteps = 8
-  pulseDenom = 16
-  direction = 1
-  offset = 0
+  if Unassigned steps
+    steps = 8
+  endif
+  if Unassigned controlSteps
+    controlSteps = 8
+  endif
+  if Unassigned pulseDenom
+    pulseDenom = 16
+  endif
+  if Unassigned direction
+    direction = 1
+  endif
+  if Unassigned offset
+    offset = 0
+  endif
   
   // Config state
-  relativePitch = 0
-  rootNote = 0
-  minNote = 0
-  maxNote = 127
+  if Unassigned relativePitch
+    relativePitch = 0
+  endif
+  if Unassigned rootNote
+    rootNote = 0
+  endif
+  if Unassigned minNote
+    minNote = 0
+  endif
+  if Unassigned maxNote
+    maxNote = 127
+  endif
   
   // Sequencer internal state
   metroPulse = -1
@@ -45,7 +63,9 @@
   // UI internal state
   doubleShiftValid = False
   activeScreen = screen_main
-  knobValues = []
+  if Unassigned knobValues
+    knobValues = []
+  endif
   
   SetKnobValue knob_direction, 127
   SetKnobValue knob_pulse, 100 
@@ -53,12 +73,17 @@
   SetKnobValue knob_controlSteps, 127  
   SetKnobValue knob_offset, 0  
 
-  SetRootNote 0
-  PresetScale 0
+  SetRootNote rootNote
+  // PresetScale 0
   
-  for i = 0 to 7
-    SetKnobValue i + 11, 100
-  endfor
+  // Only do this if not restoring a saved state
+  if Unassigned loaded
+    for i = 0 to 7
+      SetKnobValue i + 11, 100
+    endfor
+  
+    loaded = True 
+  endif
   
   Call @SaveKnobValues
   // lol this won't scale
