@@ -12,6 +12,8 @@
   knob_scale = 0
   knob_root = 1
   knob_relativePitch = 2
+  knob_minNote = 3
+  knob_maxNote = 4
   
   // Visible UI state
   steps = 8
@@ -23,6 +25,8 @@
   // Config state
   relativePitch = False
   rootNote = 0
+  minNote = 0
+  maxNote = 127
   
   // Sequencer internal state
   metroPulse = -1
@@ -112,6 +116,12 @@
     elseif LastKnob = knob_relativePitch
       relativePitch = Round(TranslateScale (GetKnobValue knob_relativePitch), 0, 127, 0, 1)
       Call @UpdateUI
+    elseif LastKnob = knob_minNote
+      minNote = Round(GetKnobValue knob_minNote)
+      Call @UpdateUI
+    elseif LastKnob = knob_maxNote
+      maxNote = Round(GetKnobValue knob_maxNote)
+      Call @UpdateUI
     endif
   endif
 @End 
@@ -138,6 +148,8 @@
     LabelKnob 0, ScaleName
     LabelKnob 1, {Root: }, RootNoteName 
     LabelKnob 2, {Rel: }, relativePitch 
+    LabelKnob knob_minNote, {Min: }, minNote
+    LabelKnob knob_maxNote, {Max: }, maxNote
   endif
 @End
 
@@ -195,13 +207,14 @@
   currentStep = (metroPulse + offset) % steps
   currentControlStep = ((metroPulse + offset) % controlSteps)
 
+  note = TranslateScale knobValues[currentStep], 0, 127, minNote, maxNote
+
   if relativePitch
-    note = rootNote + knobValues[currentStep]
-  else
-    note = knobValues[currentStep]
+    note = rootNote + note
   endif
   
   note = ScaleQuantize (note)
+  
   control = knobValues[currentControlStep + 11]
   
   if note > 0
