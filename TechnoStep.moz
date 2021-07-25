@@ -7,6 +7,7 @@
   knob_offset = 19
   knob_steps = 20
   knob_controlSteps = 21 
+  knob_gateSteps = 20
   
   // Config knob constants
   knob_scale = 0
@@ -22,12 +23,16 @@
   if Unassigned controlSteps
     controlSteps = 8
   endif
-  if Unassigned actulControlSteps
+  if Unassigned actualControlSteps
     actualControlSteps = 8
   endif
   if Unassigned gateSteps
     gateSteps = 8
   endif
+  if Unassigned actualGateSteps
+    actualGateSteps = 8
+  endif
+  
   // Duplicated as there is no Log2 function
   if Unassigned pulse
     pulse = 4
@@ -63,6 +68,7 @@
   metroPulse = -1
   currentStep = -1
   currentControlStep = -1
+  currentGateStep = -1  
   currentStepDelta = 1
   
   if Unassigned stepValues
@@ -77,7 +83,7 @@
   
   if Unassigned gateValues
     gateValues = []
-    FillArray gateValues, 95, 8
+    FillArray gateValues, 63, 8
   endif
   
   lastHostBeat = 0
@@ -91,6 +97,7 @@
   
   pad_randomiseSteps = 0
   pad_randomiseControl = 1
+  pad_randomiseGate = 2
   pad_config = 8
   
   // UI internal state
@@ -142,6 +149,14 @@
     endif
     
     Call @UpdateUI
+  elseif activeScreen = screen_shift
+    if LastKnob < 8
+      gateValues[LastKnob] = value
+    elseif LastKnob = knob_gateSteps
+      gateSteps = Round(TranslateScale value, 0, 127, 0, 8)
+    endif
+    
+    Call @UpdateUI
   elseif activeScreen = screen_config
     if LastKnob = knob_scale
       scale = Round(TranslateScale value, 0, 127, 0, 24)
@@ -170,7 +185,9 @@
     if LastPad = pad_randomiseSteps
       Call @RandomiseSteps
     elseif LastPad = pad_randomiseControl
-      Call @RandomiseControl  
+      Call @RandomiseControl
+    elseif LastPad = pad_randomiseGate
+      Call @RandomiseGate  
     elseif LastPad = pad_config
       nextScreen = screen_config
       Call @SwitchScreen
@@ -187,6 +204,12 @@
 @RandomiseControl
   for i = 0 to 7
     controlValues[i] = Random 0, 127
+  endfor
+@End
+
+@RandomiseGate
+  for i = 0 to 7
+    gateValues[i] = Random 0, 127
   endfor
 @End
 
@@ -221,6 +244,12 @@
     ShowLayout 1
     LabelKnobs {TechnoStep: Aux}
     
+    if gateSteps = 0
+      LabelKnob knob_gateSteps, {Gate: 🔗}
+    else
+      LabelKnob knob_gateSteps, {Gate: }, gateSteps
+    endif
+    
     Call @UpdateAuxStepsUI
   elseif activeScreen = screen_config
     ShowLayout 1
@@ -238,7 +267,16 @@
     
     LabelPad pad_randomiseSteps, {Randomise Steps}
     LabelPad pad_randomiseControl, {Randomise Control}    
+    LabelPad pad_randomiseGate, {Randomise Gate}    
     LabelPad pad_config, {Config}
+  endif
+@End
+
+@UpdateStepsUI
+  if activeScreen = screen_main
+    Call @UpdateMainStepsUI
+  elseif activeScreen = screen_shift
+    Call @UpdateAuxStepsUI
   endif
 @End
 
@@ -269,12 +307,14 @@
 @End
 
 @UpdateAuxStepsUI
+  Call @UpdateLinkedSteps
+  
   for i = 0 to 7
-    if i < steps
-      if i = currentStep
-        LabelKnob i, {*Step }, i + 1, {*}
+    if i < actualGateSteps
+      if i = currentGateStep
+        LabelKnob i, {*Gate }, i + 1, {*}
       else
-        LabelKnob i, {Step }, i + 1
+        LabelKnob i, {Gate }, i + 1
       endif
     else 
       LabelKnob i, { } 
@@ -282,9 +322,9 @@
   
     if i < controlSteps
       if i = currentControlStep
-        LabelKnob i + 11, {*Ctrl }, i + 1, {*}
+        LabelKnob i + 11, {*x }, i + 1, {*}
       else
-        LabelKnob i + 11, {Ctrl }, i + 1
+        LabelKnob i + 11, {x }, i + 1
       endif
     else
       LabelKnob i + 11, { }
@@ -304,6 +344,12 @@
     SetKnobValue knob_offset, TranslateScale offset, 0, 7, 0, 127
     SetKnobValue knob_steps, TranslateScale steps, 1, 8, 0, 127
     SetKnobValue knob_controlSteps, TranslateScale controlSteps, 0, 8, 0, 127
+  elseif activeScreen = screen_shift  
+    for i = 0 to 7
+      SetKnobValue i, gateValues[i]
+    endfor
+    
+    SetKnobValue knob_gateSteps, TranslateScale gateSteps, 0, 8, 0, 127
   elseif activeScreen = screen_config
     SetKnobValue knob_scale, TranslateScale scale, 0, 24, 0, 127
     SetKnobValue knob_root, TranslateScale rootNote, 0, 12, 0, 127
@@ -318,6 +364,12 @@
     actualControlSteps = steps
   else
     actualControlSteps = controlSteps
+  endif
+  
+  if gateSteps = 0
+    actualGateSteps = steps
+  else
+    actualGateSteps = gateSteps
   endif
 @End
 
@@ -335,7 +387,8 @@
   metroPulse = metroPulse + 1
   currentStep = (metroPulse + offset) % steps
   currentControlStep = ((metroPulse + offset) % actualControlSteps)
-
+  currentGateStep = ((metroPulse + offset) % actualGateSteps)
+  
   note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
 
   if relativePitch
@@ -345,13 +398,15 @@
   note = ScaleQuantize (note)
   
   control = controlValues[currentControlStep]
+  // 64 instead of 63 so the default value is slightly < 1
+  gate = gateValues[currentGateStep] / 64
   
   if note > 0
     SendMIDINoteOn 0, note, control, 0
-    SendMIDINoteOff 0, note, control, (QuarterNote / (pulseDenom / 4) - 1)
+    SendMIDINoteOff 0, note, control, (QuarterNote * gate)
   endif  
 
-  Call @UpdateMainStepsUI
+  Call @UpdateStepsUI
 @End
 
 @OnNewBar
@@ -366,15 +421,13 @@
   if activeScreen = screen_main
     nextScreen = screen_shift
     Call @SwitchScreen
+  elseif activeScreen = screen_shift
+    nextScreen = screen_main
+    Call @SwitchScreen
   endif
 @End
 
 @OnShiftUp
-  if activeScreen = screen_shift
-    nextScreen = screen_main
-    Call @SwitchScreen
-  endif
-      
   if NOT doubleShiftValid   
     doubleShiftValid = True
     SetTimerInterval 500
