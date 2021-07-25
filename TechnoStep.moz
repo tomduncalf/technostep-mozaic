@@ -75,7 +75,12 @@
   // UI constants
   screen_main = 0
   screen_shift = 1
-  screen_config = 2
+  screen_menu = 2
+  screen_config = 3
+  
+  pad_randomiseSteps = 0
+  pad_randomiseControl = 1
+  pad_config = 8
   
   // UI internal state
   doubleShiftValid = False
@@ -169,12 +174,40 @@
   endif
 @End 
 
+@OnPadUp
+  if activeScreen = screen_menu
+    if LastPad = pad_randomiseSteps
+      Call @RandomiseSteps
+    elseif LastPad = pad_randomiseControl
+      Call @RandomiseControl  
+    elseif LastPad = pad_config
+      nextScreen = screen_config
+      Call @SwitchScreen
+    endif
+  endif
+@End
+
+@RandomiseSteps
+  for i = 0 to 7
+    stepValues[i] = Random 0, 127
+  endfor
+@End
+
+@RandomiseControl
+  for i = 0 to 7
+    controlValues[i] = Random 0, 127
+  endfor
+@End
+
 @UpdateUI
   for i = 0 to 21
     LabelKnob i, { }
   endfor
   
   if activeScreen = screen_main
+    ShowLayout 1
+    LabelKnobs {TechnoStep: Main}
+    
     if direction = 0
       LabelKnob knob_direction, {Dir: Rev}
     elseif direction = 1
@@ -187,12 +220,26 @@
     LabelKnob knob_offset, {Offset: }, offset
 
     Call @UpdateStepsUI
+  elseif activeScreen = screen_shift
+    ShowLayout 1
+    LabelKnobs {TechnoStep: Aux}
   elseif activeScreen = screen_config
+    ShowLayout 1
+    LabelKnobs {TechnoStep: Config}
+    
     LabelKnob 0, ScaleName
     LabelKnob 1, {Root: }, RootNoteName 
     LabelKnob 2, {Rel: }, relativePitch 
     LabelKnob knob_minNote, {Min: }, minNote
     LabelKnob knob_maxNote, {Max: }, maxNote
+  elseif activeScreen = screen_menu
+    ShowLayout 2
+    LabelPads {TechnoStep: Menu}
+    LabelKnobs { }
+    
+    LabelPad pad_randomiseSteps, {Randomise Steps}
+    LabelPad pad_randomiseControl, {Randomise Control}    
+    LabelPad pad_config, {Config}
   endif
 @End
 
@@ -303,9 +350,9 @@
     StartTimer
   else 
     if activeScreen = screen_main OR activeScreen = screen_shift
-      nextScreen = screen_config
+      nextScreen = screen_menu
       Call @SwitchScreen
-    elseif activeScreen = screen_config
+    else
       nextScreen = screen_main
       Call @SwitchScreen
     endif
