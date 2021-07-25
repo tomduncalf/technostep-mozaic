@@ -28,12 +28,15 @@
   lastHostBeat = 0
   lastHostBar = 0
   
+  // UI constants
+  screen_main = 0
+  screen_config = 1
+  
   // UI internal state
   doubleShiftValid = False
-  showingConfig = False
-  mainScreenKnobValues = []
-  configScreenKnobValues = []
-    
+  activeScreen = screen_main
+  knobValues = []
+  
   SetKnobValue knob_direction, 127
   SetKnobValue knob_pulse, 100 
   SetKnobValue knob_steps, 127
@@ -66,7 +69,7 @@
 @End 
 
 @OnKnobChange
-  if NOT showingConfig
+  if activeScreen = screen_main
     if LastKnob = knob_direction
       direction = Round(TranslateScale (GetKnobValue knob_direction), 0, 127, 0, 1)
       if direction = 0
@@ -91,7 +94,7 @@
       controlSteps = Round(TranslateScale (GetKnobValue knob_controlSteps), 0, 127, 1, 8)
       Call @UpdateUI  
     endif
-  else
+  elseif activeScreen = screen_config
     if LastKnob = knob_scale
       PresetScale Round(TranslateScale (GetKnobValue knob_scale), 0, 127, 0, 24)
       Call @UpdateUI
@@ -107,7 +110,7 @@
     LabelKnob i, { }
   endfor
   
-  if NOT showingConfig
+  if activeScreen = screen_main
     if direction = 0
       LabelKnob knob_direction, {Dir: Rev}
     elseif direction = 1
@@ -120,14 +123,14 @@
     LabelKnob knob_offset, {Offset: }, offset
 
     Call @UpdateStepsUI
-  else
+  elseif activeScreen = screen_config
     LabelKnob 0, ScaleName
     LabelKnob 1, {Root: }, RootNoteName 
   endif
 @End
 
 @UpdateStepsUI
-  if NOT showingConfig
+  if activeScreen = screen_main
     for i = 0 to 7
       if i < steps
         if i = currentStep
@@ -152,10 +155,23 @@
   endif
 @End
 
-@ShowMainScreen
+@SwitchScreen
+  Call @SaveKnobValues
+  activeScreen = nextScreen
+  Call @UpdateUI
+  Call @RestoreKnobValues
 @End
 
-@ShowConfigScreen
+@SaveKnobValues
+  for i = 0 to 21
+    knobValues[i + (activeScreen * 22)] = GetKnobValue i
+  endfor
+@End
+
+@RestoreKnobValues
+  for i = 0 to 21
+    SetKnobValue i, knobValues[i + (activeScreen * 22)]
+  endfor
 @End
 
 @UpdateMetronome
@@ -192,12 +208,12 @@
     SetTimerInterval 500
     StartTimer
   else 
-    if NOT showingConfig
-      showingConfig = True
-      ShowLayout 0
-    else
-      showingConfig = False
-      ShowLayout 1
+    if activeScreen = screen_main
+      nextScreen = screen_config
+      Call @SwitchScreen
+    elseif activeScreen = screen_config
+      nextScreen = screen_main
+      Call @SwitchScreen
     endif
     
     Call @UpdateUI
@@ -208,4 +224,4 @@
 @OnTimer
   doubleShiftValid = False
   StopTimer
-  @End 
+@End
