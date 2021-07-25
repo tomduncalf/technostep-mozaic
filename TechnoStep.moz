@@ -23,7 +23,7 @@
   offset = 0
   
   // Config state
-  relativePitch = False
+  relativePitch = 0
   rootNote = 0
   minNote = 0
   maxNote = 127
@@ -39,7 +39,8 @@
   
   // UI constants
   screen_main = 0
-  screen_config = 1
+  screen_shift = 1
+  screen_config = 2
   
   // UI internal state
   doubleShiftValid = False
@@ -60,6 +61,9 @@
   endfor
   
   Call @SaveKnobValues
+  // lol this won't scale
+  knobValues[(screen_config * 22) + 4] = 127
+  
   Call @UpdateUI
   Call @UpdateMetronome
 @End 
@@ -233,13 +237,25 @@
   lastHostBeat = HostBeat
 @End
 
+@OnShiftDown
+  if activeScreen = screen_main
+    nextScreen = screen_shift
+    Call @SwitchScreen
+  endif
+@End
+
 @OnShiftUp
-  if NOT doubleShiftValid
+  if activeScreen = screen_shift
+    nextScreen = screen_main
+    Call @SwitchScreen
+  endif
+      
+  if NOT doubleShiftValid   
     doubleShiftValid = True
     SetTimerInterval 500
     StartTimer
   else 
-    if activeScreen = screen_main
+    if activeScreen = screen_main OR activeScreen = screen_shift
       nextScreen = screen_config
       Call @SwitchScreen
     elseif activeScreen = screen_config
