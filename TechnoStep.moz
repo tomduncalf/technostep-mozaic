@@ -22,6 +22,10 @@
   if Unassigned controlSteps
     controlSteps = 8
   endif
+  // Duplicated as there is no Log2 function
+  if Unassigned pulse
+    pulse = 4
+  endif
   if Unassigned pulseDenom
     pulseDenom = 16
   endif
@@ -39,6 +43,9 @@
   if Unassigned rootNote
     rootNote = 0
   endif
+  if Unassigned scale
+    scale = 0
+  endif
   if Unassigned minNote
     minNote = 0
   endif
@@ -52,6 +59,16 @@
   currentControlStep = -1
   currentStepDelta = 1
   
+  if Unassigned stepValues
+    stepValues = []
+    FillArray stepValues, 63, 8
+  endif
+  
+  if Unassigned controlValues
+    controlValues = []
+    FillArray controlValues, 100, 8
+  endif
+  
   lastHostBeat = 0
   lastHostBar = 0
   
@@ -63,9 +80,6 @@
   // UI internal state
   doubleShiftValid = False
   activeScreen = screen_main
-  if Unassigned knobValues
-    knobValues = []
-  endif
   
   SetKnobValue knob_direction, 127
   SetKnobValue knob_pulse, 100 
@@ -74,7 +88,7 @@
   SetKnobValue knob_offset, 0  
 
   SetRootNote rootNote
-  // PresetScale 0
+  PresetScale scale
   
   // Only do this if not restoring a saved state
   if Unassigned loaded
@@ -85,11 +99,8 @@
     loaded = True 
   endif
   
-  Call @SaveKnobValues
-  // lol this won't scale
-  knobValues[(screen_config * 22) + 4] = 127
-  
   Call @UpdateUI
+  Call @UpdateKnobs
   Call @UpdateMetronome
 @End 
 
@@ -106,52 +117,55 @@
   //Call @UpdateUI
 @End 
 
-@OnKnobChange
-  knobValues[LastKnob + (activeScreen * 22)] = GetKnobValue LastKnob
+@OnKnobChange  
+  value = GetKnobValue LastKnob
   
   if activeScreen = screen_main
-    if LastKnob = knob_direction
-      direction = Round(TranslateScale (GetKnobValue knob_direction), 0, 127, 0, 1)
+    if LastKnob < 8
+      stepValues[LastKnob] = value
+    elseif LastKnob >= 11 AND LastKnob < 19
+      controlValues[LastKnob - 11] = value
+    elseif LastKnob = knob_direction
+      direction = Round(TranslateScale value, 0, 127, 0, 1)
       if direction = 0
         currentStepDelta = -1
       else
         currentStepDelta = 1
       endif
-    
-      Call @UpdateUI
     elseif LastKnob = knob_offset
-      offset = Round(TranslateScale (GetKnobValue knob_offset), 0, 127, 0, 7)
-
-      Call @UpdateUI
+      offset = Round(TranslateScale value, 0, 127, 0, 7)
     elseif LastKnob = knob_pulse
-      pulseDenom = Pow 2, Round(TranslateScale (GetKnobValue knob_pulse), 0, 127, 0, 5) 
-      Call @UpdateUI
+      pulse = Round(TranslateScale value, 0, 127, 0, 5) 
+      pulseDenom = Pow 2, pulse
+  
       Call @UpdateMetronome
     elseif LastKnob = knob_steps
-      steps = Round(TranslateScale (GetKnobValue knob_steps), 0, 127, 1, 8)
-      Call @UpdateUI
+      steps = Round(TranslateScale value, 0, 127, 1, 8)
     elseif LastKnob = knob_controlSteps
-      controlSteps = Round(TranslateScale (GetKnobValue knob_controlSteps), 0, 127, 1, 8)
-      Call @UpdateUI  
+      controlSteps = Round(TranslateScale value, 0, 127, 1, 8)
     endif
+    
+    Call @UpdateUI
   elseif activeScreen = screen_config
     if LastKnob = knob_scale
-      PresetScale Round(TranslateScale (GetKnobValue knob_scale), 0, 127, 0, 24)
-      Call @UpdateUI
+      scale = Round(TranslateScale value, 0, 127, 0, 24)
+      PresetScale scale
     elseif LastKnob = knob_root
-      rootNote = Round(TranslateScale (GetKnobValue knob_root), 0, 127, 0, 12)
+      rootNote = Round(TranslateScale value, 0, 127, 0, 12)
       SetRootNote rootNote
       Call @UpdateUI
     elseif LastKnob = knob_relativePitch
-      relativePitch = Round(TranslateScale (GetKnobValue knob_relativePitch), 0, 127, 0, 1)
+      relativePitch = Round(TranslateScale value, 0, 127, 0, 1)
       Call @UpdateUI
     elseif LastKnob = knob_minNote
-      minNote = Round(GetKnobValue knob_minNote)
+      minNote = Round value
       Call @UpdateUI
     elseif LastKnob = knob_maxNote
-      maxNote = Round(GetKnobValue knob_maxNote)
+      maxNote = Round value
       Call @UpdateUI
     endif
+    
+    Call @UpdateUI
   endif
 @End 
 
@@ -208,23 +222,31 @@
   endif
 @End
 
+@UpdateKnobs
+  if activeScreen = screen_main
+    for i = 0 to 7
+      SetKnobValue i, stepValues[i]
+      SetKnobValue (i + 11), controlValues[i]
+    endfor
+    
+    SetKnobValue knob_direction, TranslateScale direction, 0, 1, 0, 127
+    SetKnobValue knob_pulse, TranslateScale pulse, 0, 5, 0, 127 
+    SetKnobValue knob_offset, TranslateScale offset, 0, 7, 0, 127
+    SetKnobValue knob_steps, TranslateScale steps, 1, 8, 0, 127
+    SetKnobValue knob_controlSteps, TranslateScale controlSteps, 1, 8, 0, 127
+  elseif activeScreen = screen_config
+    SetKnobValue knob_scale, TranslateScale scale, 0, 24, 0, 127
+    SetKnobValue knob_root, TranslateScale rootNote, 0, 12, 0, 127
+    SetKnobValue knob_relativePitch, TranslateScale relativePitch, 0, 1, 0, 127
+    SetKnobValue knob_minNote, minNote
+    SetKnobValue knob_maxNote, maxNote
+  endif
+@End
+
 @SwitchScreen
-  Call @SaveKnobValues
   activeScreen = nextScreen
   Call @UpdateUI
-  Call @RestoreKnobValues
-@End
-
-@SaveKnobValues
-  for i = 0 to 21
-    knobValues[i + (activeScreen * 22)] = GetKnobValue i
-  endfor
-@End
-
-@RestoreKnobValues
-  for i = 0 to 21
-    SetKnobValue i, knobValues[i + (activeScreen * 22)]
-  endfor
+  Call @UpdateKnobs
 @End
 
 @UpdateMetronome
@@ -236,7 +258,7 @@
   currentStep = (metroPulse + offset) % steps
   currentControlStep = ((metroPulse + offset) % controlSteps)
 
-  note = TranslateScale knobValues[currentStep], 0, 127, minNote, maxNote
+  note = TranslateScale stepValues[currentStep], 0, 127, minNote, maxNote
 
   if relativePitch
     note = rootNote + note
@@ -244,7 +266,7 @@
   
   note = ScaleQuantize (note)
   
-  control = knobValues[currentControlStep + 11]
+  control = controlValues[currentControlStep]
   
   if note > 0
     SendMIDINoteOn 0, note, control, 0
