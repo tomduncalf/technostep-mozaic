@@ -1,0 +1,211 @@
+@OnLoad
+  ShowLayout 1
+  
+  // Knob constants
+  knob_direction = 10
+  knob_pulse = 9
+  knob_offset = 19
+  knob_steps = 20
+  knob_controlSteps = 21 
+  
+  // Config knob constants
+  knob_scale = 0
+  knob_root = 1
+  
+  // Visible UI state
+  steps = 8
+  controlSteps = 8
+  pulseDenom = 16
+  direction = 1
+  offset = 0
+  
+  // Sequencer internal state
+  metroPulse = -1
+  currentStep = -1
+  currentControlStep = -1
+  currentStepDelta = 1
+  
+  lastHostBeat = 0
+  lastHostBar = 0
+  
+  // UI internal state
+  doubleShiftValid = False
+  showingConfig = False
+  mainScreenKnobValues = []
+  configScreenKnobValues = []
+    
+  SetKnobValue knob_direction, 127
+  SetKnobValue knob_pulse, 100 
+  SetKnobValue knob_steps, 127
+  SetKnobValue knob_controlSteps, 127  
+  SetKnobValue knob_offset, 0  
+
+  for i = 0 to 7
+    SetKnobValue i + 11, 100
+  endfor
+  
+  for i = 0 to 21
+    mainScreenKnobValues[i] = GetKnobValue i 
+  endfor
+ 
+  Call @UpdateUI
+  Call @UpdateMetronome
+@End 
+
+@OnHostStart
+  // Assume we have rewound to the start, ideally this would be more robust
+  if HostBar <> lastHostBar OR HostBeat <> lastHostBeat
+    metroPulse = -1
+  endif
+  //Log {Bar }, HostBar, { }, lastHostBar, { Beat }, HostBeat, { }, lastHostBeat
+@End 
+
+@OnHostStop
+  //currentStep = -1
+  //Call @UpdateUI
+@End 
+
+@OnKnobChange
+  if NOT showingConfig
+    if LastKnob = knob_direction
+      direction = Round(TranslateScale (GetKnobValue knob_direction), 0, 127, 0, 1)
+      if direction = 0
+        currentStepDelta = -1
+      else
+        currentStepDelta = 1
+      endif
+    
+      Call @UpdateUI
+    elseif LastKnob = knob_offset
+      offset = Round(TranslateScale (GetKnobValue knob_offset), 0, 127, 0, 7)
+
+      Call @UpdateUI
+    elseif LastKnob = knob_pulse
+      pulseDenom = Pow 2, Round(TranslateScale (GetKnobValue knob_pulse), 0, 127, 0, 5) 
+      Call @UpdateUI
+      Call @UpdateMetronome
+    elseif LastKnob = knob_steps
+      steps = Round(TranslateScale (GetKnobValue knob_steps), 0, 127, 1, 8)
+      Call @UpdateUI
+    elseif LastKnob = knob_controlSteps
+      controlSteps = Round(TranslateScale (GetKnobValue knob_controlSteps), 0, 127, 1, 8)
+      Call @UpdateUI  
+    endif
+  else
+    if LastKnob = knob_scale
+      PresetScale Round(TranslateScale (GetKnobValue knob_scale), 0, 127, 0, 24)
+      Call @UpdateUI
+    elseif LastKnob = knob_root
+      SetRootNote Round(TranslateScale (GetKnobValue knob_root), 0, 127, 0, 12)
+      Call @UpdateUI
+    endif
+  endif
+@End 
+
+@UpdateUI
+  for i = 0 to 21
+    LabelKnob i, { }
+  endfor
+  
+  if NOT showingConfig
+    if direction = 0
+      LabelKnob knob_direction, {Dir: Rev}
+    elseif direction = 1
+      LabelKnob knob_direction, {Dir: Fwd}
+    endif
+  
+    LabelKnob knob_pulse, {Pulse: 1/}, pulseDenom
+    LabelKnob knob_steps, {Steps: }, steps
+    LabelKnob knob_controlSteps, {C.Steps: }, controlSteps
+    LabelKnob knob_offset, {Offset: }, offset
+
+    Call @UpdateStepsUI
+  else
+    LabelKnob 0, ScaleName
+    LabelKnob 1, {Root: }, RootNoteName 
+  endif
+@End
+
+@UpdateStepsUI
+  if NOT showingConfig
+    for i = 0 to 7
+      if i < steps
+        if i = currentStep
+          LabelKnob i, {*Step }, i + 1, {*}
+        else
+          LabelKnob i, {Step }, i + 1
+        endif
+      else 
+        LabelKnob i, { } 
+      endif
+    
+      if i < controlSteps
+        if i = currentControlStep
+          LabelKnob i + 11, {*Ctrl }, i + 1, {*}
+        else
+          LabelKnob i + 11, {Ctrl }, i + 1
+        endif
+      else
+        LabelKnob i + 11, { }
+      endif
+    endfor 
+  endif
+@End
+
+@ShowMainScreen
+@End
+
+@ShowConfigScreen
+@End
+
+@UpdateMetronome
+  SetMetroPPQN pulseDenom / 4
+@End
+
+@OnMetroPulse
+  metroPulse = metroPulse + 1
+  currentStep = (metroPulse + offset) % steps
+  currentControlStep = ((metroPulse + offset) % controlSteps)
+
+  note = ScaleQuantize (GetKnobValue currentStep)
+  control = GetKnobValue (currentControlStep + 11)
+  
+  if note > 0
+    SendMIDINoteOn 0, note, control, 0
+    SendMIDINoteOff 0, note, control, 50
+  endif  
+
+  Call @UpdateStepsUI
+@End
+
+@OnNewBar
+  lastHostBar = HostBar 
+@End
+
+@OnNewBeat
+  lastHostBeat = HostBeat
+@End
+
+@OnShiftUp
+  if NOT doubleShiftValid
+    doubleShiftValid = True
+    SetTimerInterval 500
+    StartTimer
+  else 
+    if NOT showingConfig
+      showingConfig = True
+      ShowLayout 0
+    else
+      showingConfig = False
+      ShowLayout 1
+    endif
+    
+    Call @UpdateUI
+    doubleShiftValid = False
+  endif
+@End 
+
+@OnTimer
+  doubleShiftValid = False
+  StopTimer
+  @End 
